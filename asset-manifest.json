@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/programming-web/static/css/main.87c31c3b.css",
+    "main.js": "/programming-web/static/js/main.1e11fa18.js",
+    "index.html": "/programming-web/index.html",
+    "main.87c31c3b.css.map": "/programming-web/static/css/main.87c31c3b.css.map",
+    "main.1e11fa18.js.map": "/programming-web/static/js/main.1e11fa18.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.87c31c3b.css",
+    "static/js/main.1e11fa18.js"
+  ]
+}
