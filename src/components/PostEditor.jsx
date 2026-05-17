@@ -4,108 +4,204 @@ import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
 
 const PostEditor = ({ post, onComplete }) => {
   const [title, setTitle] = useState(post?.title || '');
-  const [pages, setPages] = useState(post?.pages || [{ pageTitle: '', elements: [] }]);
+  const [pages, setPages] = useState(post?.pages || [
+    { pageTitle: '첫 번째 단원', elements: [{ type: 'text', content: '' }] }
+  ]);
 
-  const addPage = () => setPages([...pages, { pageTitle: '', elements: [] }]);
+  // 각 페이지의 접힘(collapsed) 상태 관리 (true = 접힘, false = 펼침)
+  const [collapsedStates, setCollapsedStates] = useState(
+    pages.map((_, index) => index !== 0)
+  );
 
-  // 페이지 삭제 기능 추가
-  const removePage = (pIdx) => {
-    if (pages.length > 1 && window.confirm(`${pIdx + 1}번 페이지 전체를 삭제하시겠습니까?`)) {
-      const newPages = pages.filter((_, index) => index !== pIdx);
-      setPages(newPages);
+  // 확실하게 접고 펼치기 위한 토글 함수
+  const toggleCollapse = (index) => {
+    setCollapsedStates(prev => prev.map((state, i) => i === index ? !state : state));
+  };
+
+  const handleSave = async () => {
+    if (!title.trim()) return alert("강의 제목을 입력하세요.");
+    
+    const data = {
+      title,
+      pages,
+      updatedAt: new Date()
+    };
+
+    if (post?.id) {
+      await updateDoc(doc(db, "posts", post.id), data);
+    } else {
+      await addDoc(collection(db, "posts"), { ...data, createdAt: new Date() });
     }
-  };
-
-  const addElement = (pIdx, type) => {
-    const newPages = [...pages];
-    newPages[pIdx].elements.push({ type, content: '' });
-    setPages(newPages);
-  };
-
-  // 요소(텍스트/코드) 삭제 기능 추가
-  const removeElement = (pIdx, eIdx) => {
-    const newPages = [...pages];
-    newPages[pIdx].elements = newPages[pIdx].elements.filter((_, index) => index !== eIdx);
-    setPages(newPages);
-  };
-
-  const savePost = async () => {
-    if (!title.trim()) return alert("제목을 입력해주세요.");
-    const data = { title, pages, updatedAt: new Date() };
-    if (post?.id) await updateDoc(doc(db, "posts", post.id), data);
-    else await addDoc(collection(db, "posts"), { ...data, createdAt: new Date() });
     onComplete();
   };
 
+  const addPage = () => {
+    setPages([...pages, { pageTitle: `새 단원 ${pages.length + 1}`, elements: [{ type: 'text', content: '' }] }]);
+    setCollapsedStates([...collapsedStates.map(() => true), false]);
+  };
+
+  const removePage = (pageIdx) => {
+    if (pages.length === 1) return alert("최소 한 개의 단원이 필요합니다.");
+    setPages(pages.filter((_, i) => i !== pageIdx));
+    setCollapsedStates(collapsedStates.filter((_, i) => i !== pageIdx));
+  };
+
+  const updatePageTitle = (pageIdx, value) => {
+    const newPages = [...pages];
+    newPages[pageIdx].pageTitle = value;
+    setPages(newPages);
+  };
+
+  const addElement = (pageIdx, type) => {
+    const newPages = [...pages];
+    newPages[pageIdx].elements.push({ type, content: '' });
+    setPages(newPages);
+  };
+
+  const updateElement = (pageIdx, elIdx, value) => {
+    const newPages = [...pages];
+    newPages[pageIdx].elements[elIdx].content = value;
+    setPages(newPages);
+  };
+
+  const removeElement = (pageIdx, elIdx) => {
+    const newPages = [...pages];
+    newPages[pageIdx].elements = newPages[pageIdx].elements.filter((_, i) => i !== elIdx);
+    setPages(newPages);
+  };
+
   return (
-    <div style={{ paddingBottom: '120px' }}>
+    <div style={{ background: '#fff', padding: '30px', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
+      <h3 style={{ margin: '0 0 25px 0', fontSize: '1.3rem', fontWeight: 'bold', color: '#1e293b' }}>
+        {post ? '강의 수정하기' : '새로운 강의 작성'}
+      </h3>
+      
       <div style={{ marginBottom: '30px' }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>강좌 제목</label>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#475569' }}>강의 대제목</label>
         <input 
-          style={{ fontSize: '1.5rem', width: '100%', padding: '15px', borderRadius: '10px', border: '1px solid #ddd', boxSizing: 'border-box' }}
-          placeholder="강좌 전체 제목을 입력하세요" 
           value={title} 
           onChange={e => setTitle(e.target.value)} 
+          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '1.05rem' }} 
+          placeholder="예: 파이썬 기초 문법 뽀개기" 
         />
       </div>
 
-      {pages.map((page, pIdx) => (
-        <div key={pIdx} style={{ background: '#fff', border: '1px solid #eee', padding: '25px', marginBottom: '30px', borderRadius: '15px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-            <h4 style={{ margin: 0, color: '#4f46e5' }}>{pIdx + 1}번 페이지</h4>
-            <button 
-              onClick={() => removePage(pIdx)}
-              style={{ padding: '5px 10px', background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}
+      <div style={{ marginBottom: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h4 style={{ margin: 0, color: '#475569', fontWeight: 'bold' }}>단원 편집 ({pages.length}개)</h4>
+        <button onClick={addPage} style={{ padding: '8px 16px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+          + 새 단원(페이지) 추가
+        </button>
+      </div>
+
+      {pages.map((page, pageIdx) => {
+        const isCollapsed = collapsedStates[pageIdx];
+
+        return (
+          <div key={pageIdx} style={{ 
+            background: '#f8fafc', 
+            borderRadius: '16px', 
+            border: '1px solid #e2e8f0', 
+            marginBottom: '20px',
+            overflow: 'hidden'
+          }}>
+            {/* 아코디언 헤더 구역 */}
+            <div 
+              style={{ 
+                padding: '16px 20px', 
+                background: isCollapsed ? '#f1f5f9' : '#e2e8f0', 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                userSelect: 'none'
+              }}
             >
-              페이지 삭제
-            </button>
-          </div>
-
-          <input 
-            placeholder="페이지 소제목을 입력하세요" 
-            value={page.pageTitle} 
-            onChange={e => {
-              const newP = [...pages]; newP[pIdx].pageTitle = e.target.value; setPages(newP);
-            }} 
-            style={{ width: '100%', padding: '10px', marginBottom: '20px', border: 'none', borderBottom: '2px solid #e2e8f0', outline: 'none', fontSize: '1.1rem' }}
-          />
-
-          {page.elements.map((el, eIdx) => (
-            <div key={eIdx} style={{ marginBottom: '20px', position: 'relative', padding: '15px', background: '#f8fafc', borderRadius: '10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>
-                  {el.type === 'text' ? '📝 Text Block' : '💻 Python Code'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                <span style={{ fontWeight: 'bold', color: '#64748b', fontSize: '0.9rem' }}>PAGE {pageIdx + 1}</span>
+                <span style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '1rem' }}>
+                  {page.pageTitle || '제목 없는 단원'}
                 </span>
-                {/* 개별 요소 삭제 버튼 */}
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                 <button 
-                  onClick={() => removeElement(pIdx, eIdx)}
-                  style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.2rem', lineHeight: '1' }}
-                  title="삭제"
+                  onClick={() => removePage(pageIdx)} 
+                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600' }}
                 >
-                  &times;
+                  단원 삭제
+                </button>
+                
+                {/* [수정] 명시적인 버튼 태그로 변경하고 onClick 이벤트를 직접 바인딩했습니다. */}
+                <button 
+                  onClick={() => toggleCollapse(pageIdx)}
+                  style={{ 
+                    fontSize: '0.85rem', 
+                    fontWeight: 'bold', 
+                    color: '#475569', 
+                    background: '#fff', 
+                    padding: '6px 12px', 
+                    borderRadius: '6px', 
+                    border: '1px solid #cbd5e1',
+                    cursor: 'pointer',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                  }}
+                >
+                  {isCollapsed ? '▼ 펼치기' : '▲ 접기'}
                 </button>
               </div>
-              <textarea 
-                value={el.content} 
-                onChange={e => {
-                  const newP = [...pages]; newP[pIdx].elements[eIdx].content = e.target.value; setPages(newP);
-                }} 
-                placeholder={el.type === 'text' ? "내용을 입력하세요..." : "# 코드를 입력하세요..."}
-                style={{ width: '100%', height: '120px', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', boxSizing: 'border-box', fontFamily: el.type === 'code' ? 'monospace' : 'inherit' }}
-              />
             </div>
-          ))}
 
-          <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
-            <button onClick={() => addElement(pIdx, 'text')} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #4f46e5', color: '#4f46e5', background: '#fff', cursor: 'pointer' }}>+ 텍스트 추가</button>
-            <button onClick={() => addElement(pIdx, 'code')} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #4f46e5', color: '#4f46e5', background: '#fff', cursor: 'pointer' }}>+ 코드 추가</button>
+            {/* 내부 콘텐츠 구역 */}
+            {!isCollapsed && (
+              <div style={{ padding: '20px', borderTop: '1px solid #e2e8f0', background: '#fff' }}>
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 'bold', color: '#64748b' }}>단원 제목</label>
+                  <input 
+                    value={page.pageTitle} 
+                    onChange={e => updatePageTitle(pageIdx, e.target.value)} 
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} 
+                    placeholder="단원의 세부 제목을 입력하세요"
+                  />
+                </div>
+
+                {page.elements.map((el, elIdx) => (
+                  <div key={elIdx} style={{ background: '#f8fafc', padding: '15px', borderRadius: '12px', marginBottom: '15px', border: '1px solid #f1f5f9', position: 'relative' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: el.type === 'text' ? '#3b82f6' : '#10b981' }}>
+                        {el.type === 'text' ? '📝 설명 텍스트' : '💻 실행용 예제 코드'}
+                      </span>
+                      <button onClick={() => removeElement(pageIdx, elIdx)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8rem' }}>삭제</button>
+                    </div>
+
+                    <textarea
+                      value={el.content}
+                      onChange={e => updateElement(pageIdx, elIdx, e.target.value)}
+                      style={{ 
+                        width: '100%', 
+                        height: el.type === 'text' ? '100px' : '140px', 
+                        padding: '10px', 
+                        borderRadius: '8px', 
+                        border: '1px solid #cbd5e1',
+                        fontFamily: el.type === 'code' ? 'monospace' : 'inherit',
+                        backgroundColor: el.type === 'code' ? '#fafafa' : '#fff'
+                      }}
+                      placeholder={el.type === 'text' ? "이론 설명을 입력하세요." : "# 여기에 파이썬 예제 코드를 입력하세요."}
+                    />
+                  </div>
+                ))}
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                  <button onClick={() => addElement(pageIdx, 'text')} style={{ flex: 1, padding: '10px', background: '#eff6ff', color: '#1d4ed8', border: '1px dashed #3b82f6', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>+ 설명 텍스트 추가</button>
+                  <button onClick={() => addElement(pageIdx, 'code')} style={{ flex: 1, padding: '10px', background: '#ecfdf5', color: '#047857', border: '1px dashed #10b981', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>+ 실행용 예제 코드 추가</button>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
 
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '20px', background: 'rgba(255,255,255,0.95)', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'center', gap: '15px', backdropFilter: 'blur(10px)' }}>
-        <button onClick={addPage} style={{ padding: '12px 30px', borderRadius: '10px', background: '#1e293b', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>+ 새 페이지 추가</button>
-        <button onClick={savePost} style={{ padding: '12px 40px', borderRadius: '10px', background: '#4f46e5', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)' }}>저장 및 강좌 발행</button>
+      <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '30px', borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
+        <button onClick={onComplete} style={{ padding: '12px 24px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontWeight: '600' }}>취소</button>
+        <button onClick={handleSave} style={{ padding: '12px 30px', borderRadius: '8px', border: 'none', background: '#4f46e5', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>강의 저장 및 발행</button>
       </div>
     </div>
   );
